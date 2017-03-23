@@ -1,6 +1,5 @@
 ---
 - hosts: all
-  user: root 
 
   vars:
     password: $6$1GNKV9iPHW2CL/8c$eQL4b4HFpyKwzgMwSXoySgJnLQwl405f7.Yp4U68TtHqszHgIUrAkEpkq1fsQq/8Oi/2ub1vLxD3iOhgTWVs7/
