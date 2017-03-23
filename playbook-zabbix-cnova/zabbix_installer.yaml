@@ -1,0 +1,116 @@
+---
+- hosts: all
+  user: root 
+
+  vars:
+    password: $6$1GNKV9iPHW2CL/8c$eQL4b4HFpyKwzgMwSXoySgJnLQwl405f7.Yp4U68TtHqszHgIUrAkEpkq1fsQq/8Oi/2ub1vLxD3iOhgTWVs7/
+  tasks:
+    - name: 'Criar usuario svc_monitoria'
+      user: 
+        name: svc_monitoria 
+        password: '{{ password }}'
+        createhome: 'yes'
+        comment: 'Servico Monitoria'
+      become: true
+
+    - name: 'Criar usuario zabbix'
+      user: 
+        name: zabbix 
+        createhome: 'yes'
+        comment: 'Zabbix'
+        group: zabbix
+      become: true
+
+    - stat: path=/tmp/zabbix_agentd.pid
+      register: arquivo_zabbix_service
+      become: true
+      
+    - name: 'Extrair o agente'
+      unarchive: 
+        src: arquivos/zabbix-3.0.2.tar.gz
+        dest: /tmp
+      when:
+        not arquivo_zabbix_service.stat.exists
+
+    - name: Verifica se o gcc esta instalado
+      yum:
+        name: gcc
+        state: present
+      when:
+        not arquivo_zabbix_service.stat.exists
+
+    - name: 'Configurar o agente'
+      command: ./configure --enable-agent
+      args:
+        chdir: /tmp/zabbix-3.0.2/
+      when:
+        not arquivo_zabbix_service.stat.exists
+
+    - name: 'Instalar o agente'
+      command: make install 
+      args:
+        chdir: /tmp/zabbix-3.0.2/
+      become: true
+      when:
+        not arquivo_zabbix_service.stat.exists
+
+    - name: 'Corrigindo permissoes do agentd.conf'
+      file:
+        dest: /usr/local/etc/
+        owner: zabbix
+        group: zabbix
+        mode: 0777
+        recurse: yes
+      become: true
+
+    - name: 'Adicionar parametros ao agentd.conf'
+
+      lineinfile:
+        dest: /usr/local/etc/zabbix_agentd.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+
+      with_items:
+        - { regexp: '^LogFile=', line: 'LogFile=/tmp/zabbix_agentd.log' }
+        - { regexp: '^Server=', line: 'Server=zabbix-server01.dc.nova' }
+        - { regexp: '^ServerActive=', line: 'ServerActive=zabbix-server01.dc.nova' }
+        - { regexp: '^HostMetadataItem=', line: 'HostMetadataItem=system.uname' }
+        - { regexp: '^EnableRemoteCommands=', line: 'EnableRemoteCommands=1' }
+
+    - name: 'Copiar o arquivo de servico do agente'
+      copy:
+        src: arquivos/zabbix_agentd
+        dest: /etc/init.d/
+        owner: zabbix
+        mode: 0777
+      become: true
+      when:
+        not arquivo_zabbix_service.stat.exists 
+    
+    - stat: path='/usr/bin/systemctl'
+      register: systemctl_status
+
+    - name: 'Reiniciar o servico via systemctl'
+      systemd:
+        name: zabbix_agentd
+        state: restarted
+        daemon_reload: yes
+      become: true
+      when:
+        systemctl_status.stat.exists
+
+    - name: 'Reiniciar o servico via services'
+      service:
+        name: zabbix_agentd
+        state: restarted
+      become: true
+      when:
+        not systemctl_status.stat.exists
+
+
+
+
+      
+
+
+
